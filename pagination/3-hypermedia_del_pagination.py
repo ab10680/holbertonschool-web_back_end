@@ -5,7 +5,7 @@ Deletion-resilient hypermedia pagination
 
 import csv
 import math
-from typing import List, Dict, Optional, Any
+from typing import List, Dict
 
 
 class Server:
@@ -14,10 +14,10 @@ class Server:
     DATA_FILE = "Popular_Baby_Names.csv"
 
     def __init__(self):
-        self.__dataset: Optional[List[List[str]]] = None
-        self.__indexed_dataset: Optional[Dict[int, List[str]]] = None
+        self.__dataset = None
+        self.__indexed_dataset = None
 
-    def dataset(self) -> List[List[str]]:
+    def dataset(self) -> List[List]:
         """Cached dataset
         """
         if self.__dataset is None:
@@ -25,58 +25,58 @@ class Server:
                 reader = csv.reader(f)
                 dataset = [row for row in reader]
             self.__dataset = dataset[1:]
+
         return self.__dataset
 
-    def indexed_dataset(self) -> Dict[int, List[str]]:
+    def indexed_dataset(self) -> Dict[int, List]:
         """Dataset indexed by sorting position, starting at 0
         """
         if self.__indexed_dataset is None:
             dataset = self.dataset()
+            truncated_dataset = dataset[:1000]
             self.__indexed_dataset = {
                 i: dataset[i] for i in range(len(dataset))
             }
         return self.__indexed_dataset
 
-    def get_hyper_index(self, index: int = None,
-                        page_size: int = 10) -> Dict[str, Any]:
+    def get_hyper_index(self, index: int = None, page_size: int = 10) -> Dict:
         """
-        Return a deletion-resilient page and navigation indexes.
+            Get the hyper index
 
-        Args:
-            index: starting index to fetch from (defaults to 0 if None).
-            page_size: number of items to return.
+            Args:
+                index: Current page
+                page_size: Total size of the page
 
-        Returns:
-            dict with:
-              - index: the current start index of the return page
-              - next_index: index to query next (or None at the end)
-              - page_size: actual number of items returned
-              - data: the page data (list of rows)
+            Return:
+                Hyper index
         """
-        data_map = self.indexed_dataset()
+        result_dataset = []
+        index_data = self.indexed_dataset()
+        keys_list = list(index_data.keys())
+        assert index + page_size < len(keys_list)
+        assert index < len(keys_list)
 
-        if index is None:
-            index = 0
+        if index not in index_data:
+            start_index = keys_list[index]
+        else:
+            start_index = index
 
-        assert isinstance(index, int) and index >= 0
-        assert isinstance(page_size, int) and page_size > 0
-        assert index < len(data_map)
+        for i in range(start_index, start_index + page_size):
+            if i not in index_data:
+                result_dataset.append(index_data[keys_list[i]])
+            else:
+                result_dataset.append(index_data[i])
 
-        items: List[List[str]] = []
-        current = index
-        max_key = max(data_map.keys()) if data_map else -1
+        next_index: int = index + page_size
 
-        while len(items) < page_size and current <= max_key:
-            if current in data_map:
-                items.append(data_map[current])
-            current += 1
-
-        next_index: Optional[int]
-        next_index = current if current <= max_key else None
+        if index in keys_list:
+            next_index
+        else:
+            next_index = keys_list[next_index]
 
         return {
-            "index": index,
-            "data": items,
-            "page_size": len(items),
-            "next_index": next_index,
+            'index': index,
+            'next_index': next_index,
+            'page_size': len(result_dataset),
+            'data': result_dataset
         }
